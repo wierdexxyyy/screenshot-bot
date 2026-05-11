@@ -1,6 +1,5 @@
 import logging
 import os
-from io import BytesIO
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -72,11 +71,9 @@ async def caption_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await context.bot.send_photo(
             chat_id=DESTINATION_CHAT_ID,
             photo=file_id,
-            caption=caption,
+            caption=f"📧 {caption}\n👤 від: @{update.effective_user.username or update.effective_user.first_name}",
         )
-        await processing_msg.edit_text(
-            f"✅ Готово! Відправлено у канал з підписом «{caption}»."
-        )
+        await processing_msg.edit_text(f"✅ Готово! Відправлено у канал.")
     except Exception as e:
         logger.error(f"Помилка: {e}")
         await processing_msg.edit_text(f"❌ Помилка: {e}")
