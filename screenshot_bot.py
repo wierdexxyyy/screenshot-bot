@@ -12,13 +12,9 @@ from telegram.ext import (
     ContextTypes,
 )
 
-# ──────────────────────────────────────────────
-# НАЛАШТУВАННЯ — заміни ці значення
-# ──────────────────────────────────────────────
-BOT_TOKEN = "8797131531:AAFxwaYPDA6zMHgguCDe_EiE8vA0zyZnRmc"     # токен від @BotFather
-DESTINATION_CHAT_ID = "-1003821062018" # @назва_каналу або числовий ID чату
-ALLOWED_USER_IDS = []                 # [] = всі користувачі, або [123456, 789012] для обмеження
-# ──────────────────────────────────────────────
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+DESTINATION_CHAT_ID = os.getenv("DESTINATION_CHAT_ID", "")
+ALLOWED_USER_IDS = []
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -26,10 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Стани розмови
 WAITING_CAPTION = 1
-
-# Тимчасове сховище фото {user_id: file_id}
 user_photos: dict[int, str] = {}
 
 
@@ -37,7 +30,6 @@ def is_allowed(user_id: int) -> bool:
     if not ALLOWED_USER_IDS:
         return True
     return user_id in ALLOWED_USER_IDS
-
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -54,7 +46,6 @@ async def photo_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not is_allowed(update.effective_user.id):
         return ConversationHandler.END
 
-    # Беремо найкращу якість фото
     photo = update.message.photo[-1]
     user_photos[update.effective_user.id] = photo.file_id
 
@@ -75,22 +66,20 @@ async def caption_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return ConversationHandler.END
 
     file_id = user_photos.pop(user_id)
-    processing_msg = await update.message.reply_text("⏳ Обробляю зображення...")
+    processing_msg = await update.message.reply_text("⏳ Відправляю...")
 
     try:
-        # Відправляємо фото у канал з підписом як текст
         await context.bot.send_photo(
             chat_id=DESTINATION_CHAT_ID,
             photo=file_id,
             caption=caption,
         )
-
         await processing_msg.edit_text(
-            f"✅ Готово! Скриншот з підписом «{caption}» відправлено у канал."
+            f"✅ Готово! Відправлено у канал з підписом «{caption}»."
         )
     except Exception as e:
         logger.error(f"Помилка: {e}")
-        await processing_msg.edit_text(f"❌ Помилка при відправці: {e}")
+        await processing_msg.edit_text(f"❌ Помилка: {e}")
 
     return ConversationHandler.END
 
@@ -98,9 +87,8 @@ async def caption_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
-    user_photos.pop(user_id, None)
-    await query.edit_message_text("❌ Скасовано. Надішли нове фото коли будеш готовий.")
+    user_photos.pop(query.from_user.id, None)
+    await query.edit_message_text("❌ Скасовано.")
     return ConversationHandler.END
 
 
@@ -121,9 +109,7 @@ def main() -> None:
                 CallbackQueryHandler(cancel, pattern="^cancel$"),
             ],
         },
-        fallbacks=[
-            CommandHandler("cancel", cancel_command),
-        ],
+        fallbacks=[CommandHandler("cancel", cancel_command)],
     )
 
     app.add_handler(CommandHandler("start", start))
