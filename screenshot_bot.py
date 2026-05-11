@@ -1,7 +1,6 @@
 import logging
 import os
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -16,7 +15,7 @@ from telegram.ext import (
 # ──────────────────────────────────────────────
 # НАЛАШТУВАННЯ — заміни ці значення
 # ──────────────────────────────────────────────
-BOT_TOKEN = "8797131531:AAFxwaYPDA6zMHgguCDe_EiE8vA0zyZnRmc"   # токен від @BotFather
+BOT_TOKEN = "8797131531:AAFxwaYPDA6zMHgguCDe_EiE8vA0zyZnRmc"     # токен від @BotFather
 DESTINATION_CHAT_ID = "-1003821062018" # @назва_каналу або числовий ID чату
 ALLOWED_USER_IDS = []                 # [] = всі користувачі, або [123456, 789012] для обмеження
 # ──────────────────────────────────────────────
@@ -39,55 +38,6 @@ def is_allowed(user_id: int) -> bool:
         return True
     return user_id in ALLOWED_USER_IDS
 
-
-def add_caption_to_image(image_bytes: bytes, caption: str) -> BytesIO:
-    """Накладає підпис на нижню частину зображення."""
-    img = Image.open(BytesIO(image_bytes)).convert("RGBA")
-    width, height = img.size
-
-    # Висота панелі підпису (5% від висоти, мінімум 40px)
-    bar_height = max(40, int(height * 0.07))
-    font_size = max(16, bar_height - 12)
-
-    # Спробуємо завантажити шрифт, інакше — дефолтний
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-    except Exception:
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", font_size)
-        except Exception:
-            font = ImageFont.load_default()
-
-    # Нове зображення з місцем для підпису
-    new_height = height + bar_height
-    new_img = Image.new("RGBA", (width, new_height), (0, 0, 0, 255))
-    new_img.paste(img, (0, 0))
-
-    draw = ImageDraw.Draw(new_img)
-
-    # Фон підпису
-    draw.rectangle([(0, height), (width, new_height)], fill=(20, 20, 20, 255))
-
-    # Текст по центру
-    try:
-        bbox = draw.textbbox((0, 0), caption, font=font)
-        text_w = bbox[2] - bbox[0]
-        text_h = bbox[3] - bbox[1]
-    except AttributeError:
-        text_w, text_h = draw.textsize(caption, font=font)
-
-    x = (width - text_w) // 2
-    y = height + (bar_height - text_h) // 2
-
-    # Тінь
-    draw.text((x + 1, y + 1), caption, font=font, fill=(0, 0, 0, 180))
-    # Основний текст
-    draw.text((x, y), caption, font=font, fill=(255, 255, 255, 255))
-
-    output = BytesIO()
-    new_img.convert("RGB").save(output, format="JPEG", quality=95)
-    output.seek(0)
-    return output
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -128,18 +78,11 @@ async def caption_received(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     processing_msg = await update.message.reply_text("⏳ Обробляю зображення...")
 
     try:
-        # Завантажуємо фото
-        file = await context.bot.get_file(file_id)
-        image_bytes = await file.download_as_bytearray()
-
-        # Накладаємо підпис
-        result_image = add_caption_to_image(bytes(image_bytes), caption)
-
-        # Відправляємо у канал
-        sent = await context.bot.send_photo(
+        # Відправляємо фото у канал з підписом як текст
+        await context.bot.send_photo(
             chat_id=DESTINATION_CHAT_ID,
-            photo=result_image,
-            caption=f"📋 {caption}\n👤 від: @{update.effective_user.username or update.effective_user.first_name}",
+            photo=file_id,
+            caption=caption,
         )
 
         await processing_msg.edit_text(
